@@ -1,0 +1,42 @@
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, onChildAdded, push, get, onValue } from 'firebase/database';
+import wixRealtimeBackend  from 'wix-realtime-backend';
+
+// Firebase configuration
+const firebaseConfig = {
+  apiKey: "",
+  authDomain: "",
+  databaseURL: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+  measurementId: ""
+};
+
+// Initialize Firebase app and database
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
+
+export function sendMessage(chatID, senderID, messageText) {
+  const messageData = {
+    sender: senderID,
+    message: messageText,
+    timestamp: Date.now()
+  };
+  const messagesRef = ref(database, `chats/${chatID}/messages`);
+  return push(messagesRef, messageData);
+}
+
+export function listenForMessages(chatID) {
+  const messagesRef = ref(database, `chats/${chatID}/messages`);
+  return new Promise((resolve) => {
+    const messages = [];
+    onValue(messagesRef, (snapshot) => {
+      snapshot.forEach((childSnapshot) => {
+        messages.push(childSnapshot.val());
+      });
+      resolve(messages);
+    });
+  });
+}
