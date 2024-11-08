@@ -18,28 +18,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
-export function listenForMessages(chatID) {
-  const messagesRef = ref(database, `chats/${chatID}/messages`);
-
-  onChildAdded(messagesRef, (snapshot) => {
-    const newMessage = snapshot.val();
-
-    // Define the channel for the specific chat ID
-    const channel = { name: `chatMessages_${chatID}` };
-
-    // Publish the new message to the frontend via WebSocket
-    wixRealtimeBackend.publish(channel, newMessage)
-      .then(() => {
-        console.log("Message published to channel:", channel.name);
-      })
-      .catch((error) => {
-        console.error("Error publishing message:", error);
-      });
-  });
-}
-
-
-export function listenForMessages(chatID) {
+// Listen for messages continuously (run once in the backend)
+function listenForMessages(chatID) {
     const messagesRef = ref(database, `chats/${chatID}/messages`);
 
     // Listen only for newly added messages
@@ -58,6 +38,28 @@ export function listenForMessages(chatID) {
                 console.error("Error publishing new message:", error);
             });
     });
+}
+
+// Initialize message listener for a specific chat ID when the backend loads
+const chatID = "sampleChatID4"; // Set your specific chat ID or handle dynamically as needed
+listenForMessages(chatID);
+
+// Exported functions
+export function sendMessage(chatID, senderID, messageText) {
+    const messagesRef = ref(database, `chats/${chatID}/messages`);
+    const messageData = {
+        sender: senderID,
+        message: messageText,
+        timestamp: Date.now() // Add unique timestamp to each message
+    };
+
+    // Push the new message to Firebase
+    return push(messagesRef, messageData)
+        .then(() => "Message sent successfully!")
+        .catch((error) => {
+            console.error("Error sending message:", error);
+            throw error;
+        });
 }
 
 export async function getChatMessages(chatID) {
