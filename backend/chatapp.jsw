@@ -18,12 +18,21 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
-// Listen for messages continuously (run once in the backend)
-function listenForMessages(chatID) {
+// Store active listeners for chatIDs to prevent duplicate listeners
+const activeListeners = {};
+
+export function startListeningForMessages(chatID) {
+    // Check if a listener is already active for this chatID
+    if (activeListeners[chatID]) {
+        console.log(`Listener already active for chatID: ${chatID}`);
+        return;
+    }
+
+    console.log(`Starting listener for chatID: ${chatID}`);
     const messagesRef = ref(database, `chats/${chatID}/messages`);
 
     // Listen only for newly added messages
-    onChildAdded(messagesRef, (snapshot) => {
+    activeListeners[chatID] = onChildAdded(messagesRef, (snapshot) => {
         const newMessage = snapshot.val();
 
         // Define the channel for the specific chat ID
@@ -40,17 +49,21 @@ function listenForMessages(chatID) {
     });
 }
 
-// Initialize message listener for a specific chat ID when the backend loads
-const chatID = "sampleChatID4"; // Set your specific chat ID or handle dynamically as needed
-listenForMessages(chatID);
+export function stopListeningForMessages(chatID) {
+    if (activeListeners[chatID]) {
+        activeListeners[chatID]();
+        delete activeListeners[chatID];
+        console.log(`Stopped listening for chatID: ${chatID}`);
+    }
+}
 
-// Exported functions
+// Send message function remains the same
 export function sendMessage(chatID, senderID, messageText) {
     const messagesRef = ref(database, `chats/${chatID}/messages`);
     const messageData = {
         sender: senderID,
         message: messageText,
-        timestamp: Date.now() // Add unique timestamp to each message
+        timestamp: Date.now()
     };
 
     // Push the new message to Firebase
