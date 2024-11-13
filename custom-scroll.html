@@ -1,0 +1,15 @@
+<script>
+    window.scrollToChatBottom = function () {
+        const chatContainer = document.querySelector('.comp-m2q964lc-overflow-wrapper');
+        if (chatContainer) {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    };
+
+    // Listen for messages from Velo code
+    window.addEventListener("message", (event) => {
+        if (event.data === "scrollToChatBottom") {
+            window.scrollToChatBottom();
+        }
+    });
+</script>
