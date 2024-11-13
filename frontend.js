@@ -20,6 +20,7 @@ $w.onReady(async () => {
 
     // Subscribe to real-time updates for this chat ID
     const channel = { name: `chatMessages_${chatID}` };
+
     subscribe(channel, (message) => {
         const { payload } = message;
         const { sender, message: messageText, timestamp } = payload;
@@ -27,7 +28,8 @@ $w.onReady(async () => {
         if (sender && messageText && timestamp > lastMessageTimestamp) {
             lastMessageTimestamp = timestamp;
 
-            messageList.push({ sender, messageText });
+            // Ensure timestamp is included in messageList
+            messageList.push({ sender, messageText, timestamp });
             renderMessages();
         } else {
             console.warn("Duplicate or incomplete message data:", payload);
@@ -52,7 +54,8 @@ async function loadPreviousMessages(chatID) {
     try {
         const messages = await getChatMessages(chatID);
         messages.forEach((message) => {
-            messageList.push({ sender: message.sender, messageText: message.message });
+            // Ensure that timestamp is included for each message
+            messageList.push({ sender: message.sender, messageText: message.message, timestamp: message.timestamp });
             lastMessageTimestamp = Math.max(lastMessageTimestamp, message.timestamp);
         });
         renderMessages();
@@ -62,9 +65,20 @@ async function loadPreviousMessages(chatID) {
 }
 
 function renderMessages() {
-    const allMessagesText = messageList.map(({ sender, messageText }) => {
-        return `${sender.substring(0, 10)}: ${messageText}`;
+    // Combine all messages into a single text with sender, message, and formatted time
+    const allMessagesText = messageList.map(({ sender, messageText, timestamp }) => {
+        // Ensure the timestamp is a valid number before formatting
+        const messageTime = timestamp && !isNaN(timestamp) ?
+            new Date(parseInt(timestamp)).toLocaleString('en-US', {
+                hour: 'numeric',
+                minute: 'numeric',
+                hour12: true,
+            }) :
+            "Unknown Time";
+
+        return `${sender.substring(0, 10)} (${messageTime}): ${messageText}`;
     }).join('\n');
 
+    // Display all messages in the textbox
     $w("#textBoxChat").value = allMessagesText;
 }
