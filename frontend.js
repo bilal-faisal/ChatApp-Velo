@@ -8,7 +8,7 @@ let messageList = [];
 let lastMessageTimestamp = 0;
 
 $w.onReady(async () => {
-    const chatID = "myDynamicChatID"; // In the future, dynamically generate this
+    const chatID = "abc-xyz_abx-xsxs"; // In the future, dynamically generate this
     const senderID = currentUser.id;
 
     $w("#repeaterChat").data = []
@@ -124,3 +124,16 @@ function updateRepeaterMessages() {
         }
     });
 }
+
+// $w.onReady(() => {
+//     if (wixWindow.formFactor === "Mobile") {
+//         $w("#vectorImage8").onClick(() => {
+//             $w("#flexBox").customClassList.remove("showMessage")
+//         })
+//         $w("#repeater1").forEachItem(($item) => {
+//             $item("#box93").onClick(() => {
+//                 $w("#flexBox").customClassList.add("showMessage")
+//             })
+//         })
+//     }
+// });
