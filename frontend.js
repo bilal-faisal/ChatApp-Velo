@@ -1,17 +1,19 @@
 import { sendMessage, getChatMessages, startListeningForMessages } from 'backend/chatapp.jsw';
-import { subscribe } from 'wix-realtime';
+import { subscribe, unsubscribe } from 'wix-realtime';
 import { currentUser } from 'wix-users';
 import wixWindow from 'wix-window';
 import wixLocation from 'wix-location';
 import wixData from 'wix-data';
 
-let initialLoadComplete = false;
-let messageList = [];
-let lastMessageTimestamp = 0;
 let senderID;
-let userConversations = [];
 let currentConvoID = ""
-let currentSubscription;
+let messageList = [];
+let userConversations = [];
+let lastMessageTimestamp = 0;
+let activeChannel = null;
+let activeSubscriptionId = null;
+let isMessageHandlerSet = false;
+let filteredConversations = [];
 
 $w.onReady(async () => {
 
@@ -33,12 +35,18 @@ $w.onReady(async () => {
     await fetchUserConversations(senderID);
     if (conversationID) {
         console.log("Conversation ID provided:", conversationID);
-        currentConvoID = conversationID
-        initialLoadComplete = false;
         await setupConversation(conversationID)
     } else {
+
         console.log("No conversation ID provided.");
+        if (userConversations.length > 0) {
+            const conversationID = userConversations[0].conversationID
+            await setupConversation(conversationID)
+        }
     }
+    $w("#inputSearchConversations").onInput(() => {
+        handleSearchConversations();
+    });
 });
 
 async function setupConversation(conversationID) {
@@ -47,6 +55,9 @@ async function setupConversation(conversationID) {
         console.error("Invalid or missing conversation ID");
         return;
     }
+
+    // Update the current conversation ID
+    currentConvoID = conversationID;
 
     // Reset variables and UI
     messageList = [];
@@ -71,24 +82,21 @@ async function setupConversation(conversationID) {
     // Load previous messages for the new conversation
     await loadPreviousMessages(conversationID);
 
-    // if (!initialLoadComplete) {
-    //     await loadPreviousMessages(conversationID);
-    //     initialLoadComplete = true;
-    // }
+    if (activeSubscriptionId) {
+        await unsubscribe({ subscriptionId: activeSubscriptionId });
+        console.log(`Unsubscribed from channel: ${activeChannel}`);
+    }
 
-    // if (currentSubscription) {
-    //     currentSubscription.unsubscribe();
-    // }
-
+    // Set the active channel
+    activeChannel = `chatMessages_${conversationID}`;
 
     // Subscribe to real-time updates
-    const channel = { name: `chatMessages_${conversationID}` };
-    // currentSubscription = subscribe(channel, (message) => {
-    subscribe(channel, (message) => {
+    const channel = { name: activeChannel };
+    await subscribe(channel, (message) => {
         const { payload } = message;
         const { sender, message: messageText, timestamp } = payload;
 
-        if (conversationID === currentConvoID && sender && messageText && timestamp > lastMessageTimestamp) {
+        if (activeChannel === `chatMessages_${conversationID}` && sender && messageText && timestamp > lastMessageTimestamp) {
             lastMessageTimestamp = timestamp;
             messageList.push({
                 _id: `${timestamp}-${messageList.length}`,
@@ -97,29 +105,49 @@ async function setupConversation(conversationID) {
                 timestamp,
             });
             updateRepeaterMessages();
-        } else if (conversationID !== currentConvoID) {
+        } else if (activeChannel !== `chatMessages_${conversationID}`) {
             console.warn(`Message received for a different conversation: ${conversationID}`);
         } else {
             console.warn("Duplicate or incomplete message data:", payload);
         }
-    });
+    })
+        .then((subscriptionId) => {
+            activeSubscriptionId = subscriptionId;
+            console.log(`Subscribed to conversation: ${conversationID} with subscription ID: ${activeSubscriptionId}`);
+        });
 
-    // Send message handlers
-    $w("#buttonSendMessage").onClick(() => sendMessageHandler(conversationID, senderID));
+    setupMessageHandlers(senderID);
+}
+
+function setupMessageHandlers(senderID) {
+    if (isMessageHandlerSet) {
+        // Prevent adding multiple handlers
+        return;
+    }
+
+    $w("#buttonSendMessage").onClick(() => sendMessageHandler(senderID));
     $w("#inputUserMessage").onKeyPress((event) => {
         if (event.key === "Enter") {
-            sendMessageHandler(conversationID, senderID);
+            sendMessageHandler(senderID);
         }
     });
+
+    // Mark handlers as set
+    isMessageHandlerSet = true;
 }
 
 
 // Send message handler
-async function sendMessageHandler(conversationID, senderID) {
+async function sendMessageHandler(senderID) {
     const messageText = $w("#inputUserMessage").value.trim();
     if (messageText) {
         try {
-            await sendMessage(conversationID, senderID, messageText);
+            if (!currentConvoID) {
+                console.error("No active conversation. Message not sent.");
+                return;
+            }
+
+            await sendMessage(currentConvoID, senderID, messageText);
             // console.log("Message sent successfully!");
             $w("#inputUserMessage").value = "";
         } catch (error) {
@@ -227,8 +255,6 @@ function populateConversationsUI(conversationList) {
             $item("#textUserName").text = itemData.sellerUserName;
         }
 
-
-
         $item("#box94").hide()
         $item("#text76").hide()
 
@@ -236,9 +262,7 @@ function populateConversationsUI(conversationList) {
             if (itemData.conversationID !== currentConvoID) {
                 messageList = [];
                 $w("#repeaterChat").data = [];
-                updateRepeaterMessages(); // Clear the UI immediately
-                currentConvoID = itemData.conversationID;
-                initialLoadComplete = false;
+                updateRepeaterMessages();
                 await setupConversation(itemData.conversationID);
             }
         });
@@ -247,6 +271,24 @@ function populateConversationsUI(conversationList) {
     });
 }
 
+function handleSearchConversations() {
+    const searchTerm = $w("#inputSearchConversations").value.trim().toLowerCase();
+
+    if (searchTerm) {
+        // Filter conversations based on buyer or seller name
+        filteredConversations = userConversations.filter((convo) => {
+            const buyerName = `${convo.buyerFullName}`.toLowerCase();
+            const sellerName = `${convo.sellerFullName}`.toLowerCase();
+            return buyerName.includes(searchTerm) || sellerName.includes(searchTerm);
+        });
+    } else {
+        // If search term is empty, show all conversations
+        filteredConversations = userConversations;
+    }
+
+    // Update the repeater with filtered results
+    populateConversationsUI(filteredConversations);
+}
 
 
 // $w.onReady(() => {
