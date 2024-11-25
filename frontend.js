@@ -14,6 +14,7 @@ let activeChannel = null;
 let activeSubscriptionId = null;
 let isMessageHandlerSet = false;
 let filteredConversations = [];
+let subscriptionIds = {};
 
 $w.onReady(async () => {
 
@@ -261,10 +262,48 @@ async function fetchUserConversations(userID) {
         if (results.items.length > 0) {
             console.log("Conversations for user:", results.items);
 
-            // Populate conversations UI (repeater)
-            populateConversationsUI(results.items);
+            userConversations = results.items;
 
-            userConversations = results.items
+            // Unsubscribe from any previous subscriptions
+            for (const subscriptionId of Object.values(subscriptionIds)) {
+                await unsubscribe({ subscriptionId });
+            }
+            subscriptionIds = {};
+
+            // Subscribe to all conversation channels
+            for (const conversation of userConversations) {
+                const channel = { name: `chatMessages_${conversation.conversationID}` };
+                subscribe(channel, async (message) => {
+                    const { payload } = message;
+                    const { sender, message: messageText, timestamp } = payload;
+
+                    // Update the conversation in the array
+                    const convoToUpdate = userConversations.find(
+                        (convo) => convo.conversationID === conversation.conversationID
+                    );
+
+                    if (convoToUpdate) {
+                        convoToUpdate.lastMessage = messageText;
+                        convoToUpdate.lastMessageTime = new Date(timestamp);
+                        convoToUpdate.lastMessageSender = sender;
+
+                        // Update the database with the latest message details
+                        await wixData.update("ChatDetails", convoToUpdate);
+
+                        // Re-sort conversations and refresh the UI
+                        userConversations.sort(
+                            (a, b) =>
+                                new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
+                        );
+                        populateConversationsUI(userConversations);
+                    }
+                }).then((subscriptionId) => {
+                    subscriptionIds[conversation.conversationID] = subscriptionId;
+                });
+            }
+
+            // Populate conversations UI after subscription
+            populateConversationsUI(userConversations);
         } else {
             console.warn("No conversations found for this user");
         }
@@ -274,42 +313,26 @@ async function fetchUserConversations(userID) {
 }
 
 function populateConversationsUI(conversationList) {
-
     $w("#repeaterConversations").data = conversationList;
 
     $w("#repeaterConversations").onItemReady(($item, itemData) => {
         let participantName = "";
 
         if (senderID == itemData.sellerUserId) {
-
             $item("#imageProfilePicture").src = itemData.buyerProfilePhoto;
             $item("#textName").text = itemData.buyerFullName;
             participantName = itemData.buyerFullName.split(" ")[0];
-
-
         } else if (senderID == itemData.buyerUserId) {
-
             $item("#imageProfilePicture").src = itemData.sellerProfilePhoto;
             $item("#textName").text = itemData.sellerFullName;
             participantName = itemData.sellerFullName.split(" ")[0];
-
-        }
-
-        // Determine if the last message was sent by the user or received
-        let lastMessageDisplay = "";
-        console.log("itemData.lastMessageSender")
-        console.log(itemData.lastMessageSender)
-
-        console.log("senderID")
-        console.log(senderID)
-
-        if (itemData.lastMessageSender === senderID) {
-            lastMessageDisplay = `You: ${itemData.lastMessage}`;
-        } else {
-            lastMessageDisplay = `${participantName}: ${itemData.lastMessage}`;
         }
 
         // Show the last message (truncate to 100 characters)
+        const lastMessageDisplay =
+            itemData.lastMessageSender === senderID
+                ? `You: ${itemData.lastMessage}`
+                : `${participantName}: ${itemData.lastMessage}`;
         $item("#textLastMessage").text = lastMessageDisplay
             ? lastMessageDisplay.substring(0, 100)
             : "";
@@ -323,9 +346,7 @@ function populateConversationsUI(conversationList) {
             }
         });
 
-
-        $item("#box94").hide()
-        $item("#text76").hide()
+        $item("#box94").hide();
     });
 }
 
