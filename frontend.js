@@ -66,7 +66,6 @@ async function setupConversation(conversationID) {
     updateRepeaterMessages();
     lastMessageTimestamp = 0;
 
-
     if (senderID == convo.sellerUserId) {
         $w("#imageProfilePictureSelected").src = convo.buyerProfilePhoto;
         $w("#textNameSelected").text = convo.buyerFullName;
@@ -76,6 +75,13 @@ async function setupConversation(conversationID) {
         $w("#textNameSelected").text = convo.sellerFullName;
         $w("#textUserNameSelected").text = convo.sellerUserName;
     }
+
+    // Reset unread messages for the active conversation
+    convo.unreadMessages = 0;
+    await wixData.update("ChatDetails", convo);
+
+    // Update the UI to hide unread messages
+    populateConversationsUI(userConversations);
 
     // Start listening for messages in the backend for the current conversationID
     await startListeningForMessages(conversationID);
@@ -287,13 +293,19 @@ async function fetchUserConversations(userID) {
                         convoToUpdate.lastMessageTime = new Date(timestamp);
                         convoToUpdate.lastMessageSender = sender;
 
+                        // If the current conversation is not active, increment unreadMessages
+                        if (convoToUpdate.conversationID !== currentConvoID) {
+                            convoToUpdate.unreadMessages = (convoToUpdate.unreadMessages || 0) + 1;
+                        } else {
+                            convoToUpdate.unreadMessages = 0; // Reset unread messages for the active conversation
+                        }
+
                         // Update the database with the latest message details
                         await wixData.update("ChatDetails", convoToUpdate);
 
                         // Re-sort conversations and refresh the UI
                         userConversations.sort(
-                            (a, b) =>
-                                new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
+                            (a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
                         );
                         populateConversationsUI(userConversations);
                     }
@@ -337,6 +349,28 @@ function populateConversationsUI(conversationList) {
             ? lastMessageDisplay.substring(0, 100)
             : "";
 
+        // Format and display the last message time
+        if (itemData.lastMessageTime) {
+            const lastMessageTime = new Date(itemData.lastMessageTime).toLocaleString('en-US', {
+                hour: 'numeric',
+                minute: 'numeric',
+                hour12: true,
+                month: 'short',
+                day: 'numeric',
+            });
+            $item("#textLastMessageTime").text = lastMessageTime;
+        } else {
+            $item("#textLastMessageTime").text = "";
+        }
+
+        // Show the unread messages count
+        if (itemData.unreadMessages && itemData.unreadMessages > 0) {
+            $item("#boxUnreadMessage").show();
+            $item("#textTotalUnreadMessages").text = itemData.unreadMessages.toString();
+        } else {
+            $item("#boxUnreadMessage").hide();
+        }
+
         $item("#boxConversation").onClick(async () => {
             if (itemData.conversationID !== currentConvoID) {
                 messageList = [];
@@ -345,8 +379,6 @@ function populateConversationsUI(conversationList) {
                 await setupConversation(itemData.conversationID);
             }
         });
-
-        $item("#box94").hide();
     });
 }
 
