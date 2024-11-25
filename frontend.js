@@ -92,7 +92,7 @@ async function setupConversation(conversationID) {
 
     // Subscribe to real-time updates
     const channel = { name: activeChannel };
-    await subscribe(channel, (message) => {
+    await subscribe(channel, async (message) => {
         const { payload } = message;
         const { sender, message: messageText, timestamp } = payload;
 
@@ -105,6 +105,22 @@ async function setupConversation(conversationID) {
                 timestamp,
             });
             updateRepeaterMessages();
+
+            // Find and update the conversation in userConversations
+            const conversation = userConversations.find(convo => convo.conversationID === currentConvoID);
+            if (conversation) {
+                conversation.lastMessage = messageText;
+                conversation.lastMessageTime = new Date(timestamp);
+                conversation.lastMessageSender = sender;
+
+                // Update the database with the updated conversation
+                await wixData.update("ChatDetails", conversation);
+
+                // Re-sort conversations and refresh the UI
+                userConversations.sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
+                populateConversationsUI(userConversations);
+            }
+
         } else if (activeChannel !== `chatMessages_${conversationID}`) {
             console.warn(`Message received for a different conversation: ${conversationID}`);
         } else {
@@ -148,8 +164,28 @@ async function sendMessageHandler(senderID) {
             }
 
             await sendMessage(currentConvoID, senderID, messageText);
-            // console.log("Message sent successfully!");
             $w("#inputUserMessage").value = "";
+
+            console.log("Message sent successfully!");
+
+            // Find the conversation in userConversations
+            const conversation = userConversations.find(convo => convo.conversationID === currentConvoID);
+            if (!conversation) {
+                console.error("Conversation not found in userConversations for ID:", currentConvoID);
+                return;
+            }
+            conversation.lastMessage = messageText;
+            conversation.lastMessageTime = new Date();
+            conversation.lastMessageSender = senderID;
+
+            // Update the database with the updated conversation
+            await wixData.update("ChatDetails", conversation);
+
+
+            // Re-sort conversations and refresh the UI
+            userConversations.sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
+            populateConversationsUI(userConversations);
+
         } catch (error) {
             console.error("Error sending message:", error);
         }
@@ -219,6 +255,7 @@ async function fetchUserConversations(userID) {
     try {
         const results = await wixData.query("ChatDetails")
             .contains("conversationID", userID)
+            .descending("lastMessageTime") // Sort by lastMessageTime
             .find();
 
         if (results.items.length > 0) {
@@ -230,7 +267,6 @@ async function fetchUserConversations(userID) {
             userConversations = results.items
         } else {
             console.warn("No conversations found for this user");
-            // $w("#textNoConversations").show();
         }
     } catch (error) {
         console.error("Error fetching user conversations:", error);
@@ -242,21 +278,41 @@ function populateConversationsUI(conversationList) {
     $w("#repeaterConversations").data = conversationList;
 
     $w("#repeaterConversations").onItemReady(($item, itemData) => {
+        let participantName = "";
+
         if (senderID == itemData.sellerUserId) {
 
             $item("#imageProfilePicture").src = itemData.buyerProfilePhoto;
             $item("#textName").text = itemData.buyerFullName;
-            $item("#textUserName").text = itemData.buyerUserName;
+            participantName = itemData.buyerFullName.split(" ")[0];
+
 
         } else if (senderID == itemData.buyerUserId) {
 
             $item("#imageProfilePicture").src = itemData.sellerProfilePhoto;
             $item("#textName").text = itemData.sellerFullName;
-            $item("#textUserName").text = itemData.sellerUserName;
+            participantName = itemData.sellerFullName.split(" ")[0];
+
         }
 
-        $item("#box94").hide()
-        $item("#text76").hide()
+        // Determine if the last message was sent by the user or received
+        let lastMessageDisplay = "";
+        console.log("itemData.lastMessageSender")
+        console.log(itemData.lastMessageSender)
+
+        console.log("senderID")
+        console.log(senderID)
+
+        if (itemData.lastMessageSender === senderID) {
+            lastMessageDisplay = `You: ${itemData.lastMessage}`;
+        } else {
+            lastMessageDisplay = `${participantName}: ${itemData.lastMessage}`;
+        }
+
+        // Show the last message (truncate to 100 characters)
+        $item("#textLastMessage").text = lastMessageDisplay
+            ? lastMessageDisplay.substring(0, 100)
+            : "";
 
         $item("#boxConversation").onClick(async () => {
             if (itemData.conversationID !== currentConvoID) {
@@ -268,6 +324,8 @@ function populateConversationsUI(conversationList) {
         });
 
 
+        $item("#box94").hide()
+        $item("#text76").hide()
     });
 }
 
