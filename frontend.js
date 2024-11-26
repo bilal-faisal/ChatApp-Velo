@@ -76,11 +76,9 @@ async function setupConversation(conversationID) {
         $w("#textUserNameSelected").text = convo.sellerUserName;
     }
 
-    // Reset unread messages for the active conversation
+    // Reset unread messages for the active conversation & Update the UI to hide unread messages
     convo.unreadMessages = 0;
     await wixData.update("ChatDetails", convo);
-
-    // Update the UI to hide unread messages
     populateConversationsUI(userConversations);
 
     // Start listening for messages in the backend for the current conversationID
@@ -299,9 +297,8 @@ async function fetchUserConversations(userID) {
                         } else {
                             convoToUpdate.unreadMessages = 0; // Reset unread messages for the active conversation
                         }
-
-                        // Update the database with the latest message details
                         await wixData.update("ChatDetails", convoToUpdate);
+
 
                         // Re-sort conversations and refresh the UI
                         userConversations.sort(
@@ -364,7 +361,7 @@ function populateConversationsUI(conversationList) {
         }
 
         // Show the unread messages count
-        if (itemData.unreadMessages && itemData.unreadMessages > 0) {
+        if (itemData.unreadMessages > 0) {
             $item("#boxUnreadMessage").show();
             $item("#textTotalUnreadMessages").text = itemData.unreadMessages.toString();
         } else {
