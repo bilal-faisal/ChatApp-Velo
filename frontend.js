@@ -18,6 +18,8 @@ let subscriptionIds = {};
 
 $w.onReady(async () => {
 
+    $w("#button42").collapse()
+
     $w("#repeaterChat").data = []
     $w("#repeaterConversations").data = []
 
@@ -43,12 +45,69 @@ $w.onReady(async () => {
         if (userConversations.length > 0) {
             const conversationID = userConversations[0].conversationID
             await setupConversation(conversationID)
+        } else {
+            $w("#boxChatRight").hide()
+            $w("#textNoConversations").expand()
+            $w("#subBoxLeftConvos").collapse()
         }
     }
     $w("#inputSearchConversations").onInput(() => {
         handleSearchConversations();
     });
+
+    handleDeleteConvo()
+
 });
+
+function handleDeleteConvo() {
+    $w("#buttonOptionChat").onClick(() => {
+        if ($w("#deleteBtn").collapsed) {
+            $w("#deleteBtn").expand()
+        } else {
+            $w("#deleteBtn").collapse()
+        }
+    })
+    $w("#deleteBtn").onClick(async () => {
+        $w("#deleteBtn").collapse()
+        if (currentConvoID) {
+            try {
+                // Find the conversation to delete
+                const conversationToDelete = userConversations.find(convo => convo.conversationID === currentConvoID);
+                if (conversationToDelete) {
+                    // Remove the conversation from the database
+                    await wixData.remove("ChatDetails", conversationToDelete._id);
+
+                    console.log("Conversation deleted successfully!");
+
+                    // Remove the conversation from the userConversations array
+                    userConversations = userConversations.filter(convo => convo.conversationID !== currentConvoID);
+
+                    // Update the UI: If there are no conversations left, show a "No conversations" message
+                    if (userConversations.length > 0) {
+                        // Select the first available conversation if there are remaining conversations
+                        const newConvoID = userConversations[0].conversationID;
+                        await setupConversation(newConvoID);
+                    } else {
+                        // Hide chat UI and show "No Conversations" message
+                        $w("#boxChatRight").hide();
+                        $w("#textNoConversations").expand();
+                        $w("#subBoxLeftConvos").collapse();
+                    }
+
+                    // Optionally, you could update the conversation list on the left (the repeater)
+                    populateConversationsUI(userConversations);
+                } else {
+                    console.error("Conversation not found for deletion.");
+                }
+            } catch (error) {
+                console.error("Error deleting conversation:", error);
+            }
+        } else {
+            console.log("No active conversation to delete.");
+        }
+    });
+
+}
 
 async function setupConversation(conversationID) {
     const convo = userConversations.find((con) => con.conversationID === conversationID);
