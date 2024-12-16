@@ -4,6 +4,7 @@ import { currentUser } from 'wix-users';
 import wixWindow from 'wix-window';
 import wixLocation from 'wix-location';
 import wixData from 'wix-data';
+import { getBoundingRect } from 'wix-window-frontend';
 
 let senderID;
 let currentConvoID = ""
@@ -18,7 +19,15 @@ let subscriptionIds = {};
 
 $w.onReady(async () => {
 
-    $w("#button42").collapse()
+    // // Bilal
+    // if (wixWindow.formFactor === "Mobile") {
+    //     $w("#vectorImage8").onClick(() => {
+    //         $w("#flexBox").customClassList.remove("showMessage")
+    //     })
+    // }
+    $w("#vectorImage8").onClick(() => {
+        $w("#flexBox").customClassList.remove("showMessage")
+    })
 
     $w("#repeaterChat").data = []
     $w("#repeaterConversations").data = []
@@ -38,7 +47,13 @@ $w.onReady(async () => {
     await fetchUserConversations(senderID);
     if (conversationID) {
         console.log("Conversation ID provided:", conversationID);
-        await setupConversation(conversationID)
+
+        const firstMessage = queryParams.message
+        if (firstMessage) {
+            await setupConversation(conversationID, firstMessage)
+        } else {
+            await setupConversation(conversationID)
+        }
     } else {
 
         console.log("No conversation ID provided.");
@@ -109,7 +124,7 @@ function handleDeleteConvo() {
 
 }
 
-async function setupConversation(conversationID) {
+async function setupConversation(conversationID, firstMessage) {
     const convo = userConversations.find((con) => con.conversationID === conversationID);
     if (!convo) {
         console.error("Invalid or missing conversation ID");
@@ -146,6 +161,10 @@ async function setupConversation(conversationID) {
     // Load previous messages for the new conversation
     await loadPreviousMessages(conversationID);
 
+    if (firstMessage) {
+        $w('#inputUserMessage').value = firstMessage
+    }
+
     if (activeSubscriptionId) {
         await unsubscribe({ subscriptionId: activeSubscriptionId });
         console.log(`Unsubscribed from channel: ${activeChannel}`);
@@ -157,40 +176,40 @@ async function setupConversation(conversationID) {
     // Subscribe to real-time updates
     const channel = { name: activeChannel };
     await subscribe(channel, async (message) => {
-        const { payload } = message;
-        const { sender, message: messageText, timestamp } = payload;
+            const { payload } = message;
+            const { sender, message: messageText, timestamp } = payload;
 
-        if (activeChannel === `chatMessages_${conversationID}` && sender && messageText && timestamp > lastMessageTimestamp) {
-            lastMessageTimestamp = timestamp;
-            messageList.push({
-                _id: `${timestamp}-${messageList.length}`,
-                sender,
-                messageText,
-                timestamp,
-            });
-            updateRepeaterMessages();
+            if (activeChannel === `chatMessages_${conversationID}` && sender && messageText && timestamp > lastMessageTimestamp) {
+                lastMessageTimestamp = timestamp;
+                messageList.push({
+                    _id: `${timestamp}-${messageList.length}`,
+                    sender,
+                    messageText,
+                    timestamp,
+                });
+                updateRepeaterMessages();
 
-            // Find and update the conversation in userConversations
-            const conversation = userConversations.find(convo => convo.conversationID === currentConvoID);
-            if (conversation) {
-                conversation.lastMessage = messageText;
-                conversation.lastMessageTime = new Date(timestamp);
-                conversation.lastMessageSender = sender;
+                // Find and update the conversation in userConversations
+                const conversation = userConversations.find(convo => convo.conversationID === currentConvoID);
+                if (conversation) {
+                    conversation.lastMessage = messageText;
+                    conversation.lastMessageTime = new Date(timestamp);
+                    conversation.lastMessageSender = sender;
 
-                // Update the database with the updated conversation
-                await wixData.update("ChatDetails", conversation);
+                    // Update the database with the updated conversation
+                    await wixData.update("ChatDetails", conversation);
 
-                // Re-sort conversations and refresh the UI
-                userConversations.sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
-                populateConversationsUI(userConversations);
+                    // Re-sort conversations and refresh the UI
+                    userConversations.sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
+                    populateConversationsUI(userConversations);
+                }
+
+            } else if (activeChannel !== `chatMessages_${conversationID}`) {
+                console.warn(`Message received for a different conversation: ${conversationID}`);
+            } else {
+                console.warn("Duplicate or incomplete message data:", payload);
             }
-
-        } else if (activeChannel !== `chatMessages_${conversationID}`) {
-            console.warn(`Message received for a different conversation: ${conversationID}`);
-        } else {
-            console.warn("Duplicate or incomplete message data:", payload);
-        }
-    })
+        })
         .then((subscriptionId) => {
             activeSubscriptionId = subscriptionId;
             console.log(`Subscribed to conversation: ${conversationID} with subscription ID: ${activeSubscriptionId}`);
@@ -207,7 +226,7 @@ function setupMessageHandlers(senderID) {
 
     $w("#buttonSendMessage").onClick(() => sendMessageHandler(senderID));
     $w("#inputUserMessage").onKeyPress((event) => {
-        if (event.key === "Enter") {
+        if (event.key === "Enter" && event.shiftKey) {
             sendMessageHandler(senderID);
         }
     });
@@ -215,7 +234,6 @@ function setupMessageHandlers(senderID) {
     // Mark handlers as set
     isMessageHandlerSet = true;
 }
-
 
 // Send message handler
 async function sendMessageHandler(senderID) {
@@ -244,7 +262,6 @@ async function sendMessageHandler(senderID) {
 
             // Update the database with the updated conversation
             await wixData.update("ChatDetails", conversation);
-
 
             // Re-sort conversations and refresh the UI
             userConversations.sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
@@ -303,7 +320,7 @@ function updateRepeaterMessages() {
             // Display message in the receiver box
             $item("#boxSender").collapse();
             $item("#boxReceiver").expand();
-            $item("#textMessageReceiver").text = messageText;
+            $item("#textMessageReceiver").html = messageText;
             $item("#textMessageTimeReceiver").text = messageTime;
         }
 
@@ -358,7 +375,6 @@ async function fetchUserConversations(userID) {
                         }
                         await wixData.update("ChatDetails", convoToUpdate);
 
-
                         // Re-sort conversations and refresh the UI
                         userConversations.sort(
                             (a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
@@ -398,12 +414,12 @@ function populateConversationsUI(conversationList) {
 
         // Show the last message (truncate to 100 characters)
         const lastMessageDisplay =
-            itemData.lastMessageSender === senderID
-                ? `You: ${itemData.lastMessage}`
-                : `${participantName}: ${itemData.lastMessage}`;
-        $item("#textLastMessage").text = lastMessageDisplay
-            ? lastMessageDisplay.substring(0, 100)
-            : "";
+            itemData.lastMessageSender === senderID ?
+            `You: ${itemData.lastMessage}` :
+            `${participantName}: ${itemData.lastMessage}`;
+        $item("#textLastMessage").text = lastMessageDisplay ?
+            lastMessageDisplay.replace(/\n/g, ' ').substring(0, 50) :
+            "";
 
         // Format and display the last message time
         if (itemData.lastMessageTime) {
@@ -428,6 +444,29 @@ function populateConversationsUI(conversationList) {
         }
 
         $item("#boxConversation").onClick(async () => {
+            // // Bilal
+            // if (wixWindow.formFactor === "Mobile") {
+            //     console.log("----------")
+            //     $w("#flexBox").customClassList.add("showMessage")
+            // }
+
+            getBoundingRect()
+                .then((rect) => {
+                    const windowWidth = rect.window.width;
+                    const standardMobileWidth = 768;
+                    console.log("windowWidth")
+                    console.log(windowWidth)
+
+                    if (windowWidth <= standardMobileWidth) {
+                        // Logic for mobile screens
+
+                        $w("#flexBox").customClassList.add("showMessage")
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error getting bounding rect:', error);
+                });
+
             if (itemData.conversationID !== currentConvoID) {
                 messageList = [];
                 $w("#repeaterChat").data = [];
@@ -456,17 +495,3 @@ function handleSearchConversations() {
     // Update the repeater with filtered results
     populateConversationsUI(filteredConversations);
 }
-
-
-// $w.onReady(() => {
-//     if (wixWindow.formFactor === "Mobile") {
-//         $w("#vectorImage8").onClick(() => {
-//             $w("#flexBox").customClassList.remove("showMessage")
-//         })
-//         $w("#repeater1").forEachItem(($item) => {
-//             $item("#box93").onClick(() => {
-//                 $w("#flexBox").customClassList.add("showMessage")
-//             })
-//         })
-//     }
-// });

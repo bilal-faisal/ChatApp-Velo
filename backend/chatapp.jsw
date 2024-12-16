@@ -1,17 +1,17 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onChildAdded, push, get, onValue } from 'firebase/database';
-import wixRealtimeBackend  from 'wix-realtime-backend';
+import { getDatabase, ref, onChildAdded, push, get } from 'firebase/database';
+import wixRealtimeBackend from 'wix-realtime-backend';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  databaseURL: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
-  measurementId: ""
+    apiKey: "",
+    authDomain: "",
+    databaseURL: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: "",
+    measurementId: ""
 };
 
 // Initialize Firebase app and database
