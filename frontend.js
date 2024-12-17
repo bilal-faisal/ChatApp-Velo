@@ -1,3 +1,4 @@
+
 import { sendMessage, getChatMessages, startListeningForMessages } from 'backend/chatapp.jsw';
 import { subscribe, unsubscribe } from 'wix-realtime';
 import { currentUser } from 'wix-users';
@@ -25,9 +26,12 @@ $w.onReady(async () => {
     //         $w("#flexBox").customClassList.remove("showMessage")
     //     })
     // }
-    $w("#vectorImage8").onClick(() => {
-        $w("#flexBox").customClassList.remove("showMessage")
-    })
+
+    /////////
+    // $w("#vectorImage8 ").onClick(() => {
+    //     $w("#flexBox").customClassList.remove("showMessage")
+    // })
+    /////////
 
     $w("#repeaterChat").data = []
     $w("#repeaterConversations").data = []
@@ -460,7 +464,9 @@ function populateConversationsUI(conversationList) {
                     if (windowWidth <= standardMobileWidth) {
                         // Logic for mobile screens
 
-                        $w("#flexBox").customClassList.add("showMessage")
+                        //////////
+                        // $w("#flexBox").customClassList.add("showMessage")
+                        //////////
                     }
                 })
                 .catch((error) => {
@@ -495,3 +501,16 @@ function handleSearchConversations() {
     // Update the repeater with filtered results
     populateConversationsUI(filteredConversations);
 }
+
+// $w.onReady(() => {
+//     if (wixWindow.formFactor === "Mobile") {
+//         $w("#vectorImage8").onClick(() => {
+//             $w("#flexBox").customClassList.remove("showMessage")
+//         })
+//         $w("#repeater1").forEachItem(($item) => {
+//             $item("#box93").onClick(() => {
+//                 $w("#flexBox").customClassList.add("showMessage")
+//             })
+//         })
+//     }
+// });
